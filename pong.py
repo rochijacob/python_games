@@ -8,7 +8,6 @@ wn.title("Pong by @me")
 wn.bgcolor("white")
 wn.setup(width=800, height=600)
 #wind tracer stops the window from updating
-wn.delay(2)
 
 # score
 score_a = 0

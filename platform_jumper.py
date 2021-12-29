@@ -1,5 +1,6 @@
 #import libraries
 import pygame
+import random
 
 #initialise pygame
 pygame.init()
@@ -17,14 +18,24 @@ clock = pygame.time.Clock()
 FPS = 60
 
 #game variables
+SCROLL_THRESH = 200
 GRAVITY = 1
+MAX_PLATFORMS = 10
+scroll = 0 #controlls how far everything moves
+bg_scroll = 0
 
 #define colours
 WHITE = (255, 255, 255)
 
 #load images
-jumpy_image = pygame.image.load('assets/jump.png').convert_alpha()
-bg_image = pygame.image.load('assets/bg.png').convert_alpha()
+jumpy_image = pygame.image.load("assets/jump.png").convert_alpha()
+bg_image = pygame.image.load("assets/bg.png").convert_alpha()
+platform_image = pygame.image.load("assets/wood.png").convert_alpha()
+
+#function for drawing the background
+def draw_bg(bg_scroll):
+    screen.blit(bg_image, (0, 0 + bg_scroll))
+    screen.blit(bg_image, (0, -600 + bg_scroll))
 
 
 #player class
@@ -40,6 +51,7 @@ class Player():
 
     def move(self):
 		#reset variables
+        scroll = 0
         dx = 0
         dy = 0
 
@@ -62,40 +74,107 @@ class Player():
         if self.rect.right + dx > SCREEN_WIDTH:
             dx = SCREEN_WIDTH - self.rect.right
 
+        #check collision with platforms
+        for platform in platform_group:
+            #collision in y direction
+            if platform.rect.colliderect(self.rect.x, self.rect.y + dy, self.width, self.height):
+                #chech if above platform
+                if self.rect.bottom < platform.rect.centery:
+                    if self.vel_y > 0:
+                        self.rect.bottom = platform.rect.top
+                        dy = 0
+                        self.vel_y = -20
+
+
+        #check colision with ground
+        if self.rect.bottom + dy > SCREEN_HEIGHT:
+            dy = 0
+            self.vel_y = -20
+
+        #check if the player has bounced to the top of the screen
+        if self.rect.top <= SCROLL_THRESH:
+            #if the player moves up, everything goes down
+            if self.vel_y < 0:
+                scroll = -dy
+
+
 		#update rectangle position
         self.rect.x += dx
-        self.rect.y += dy
+        self.rect.y += dy + scroll
+
+        return scroll
 
     def draw(self):
         screen.blit(pygame.transform.flip(self.image, self.flip, False), (self.rect.x - 12, self.rect.y - 5))
-        pygame.draw.rect(screen, WHITE, self.rect, 2)
+        
 
+#platform class - sprite classes
+class Platform(pygame.sprite.Sprite):
+    def __init__(self, x, y, width):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.transform.scale(platform_image, (width, 10))
+        self.rect = self.image.get_rect()
+        self.rect.x = x
+        self.rect.y = y
 
+    def update(self, scroll):
+
+        #update platforms vertical position
+        self.rect.y += scroll
+
+        #check if platform has gone off the screen
+        if self.rect.top > SCREEN_HEIGHT:
+            self.kill()
+
+#player instance
 jumpy = Player(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 150)
+
+#platform instance - create sprite groups
+platform_group = pygame.sprite.Group()
+
+#create starting platform
+platform = Platform(0, SCREEN_HEIGHT - 50, SCREEN_WIDTH)
+platform_group.add(platform)
 
 #game loop
 run = True
 while run:
 
-	clock.tick(FPS)
+    clock.tick(FPS)
 
-	jumpy.move()
+    scroll = jumpy.move()
 
-	#draw background
-	screen.blit(bg_image, (0, 0))
+    #draw background
+    bg_scroll += scroll
+    if bg_scroll >= 600:
+        bg_scroll = 0
+    draw_bg(bg_scroll)
 
-	#draw sprites
-	jumpy.draw()
+    #generate platforms
+    if len(platform_group) < MAX_PLATFORMS:
+        p_w = random.randint(50, 70)
+        p_x = random.randint(0, SCREEN_WIDTH - p_w)
+        p_y = platform.rect.y - random.randint(80, 120)
+        platform = Platform(p_x, p_y, p_w)
+        platform_group.add(platform)
+
+
+    #update platforms
+    platform_group.update(scroll)
+
+    #draw sprites
+    platform_group.draw(screen)
+    jumpy.draw()
 
 
 	#event handler
-	for event in pygame.event.get():
-		if event.type == pygame.QUIT:
-			run = False
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            run = False
 
 
 	#update display window
-	pygame.display.update()
+    pygame.display.update()
 
 
 
