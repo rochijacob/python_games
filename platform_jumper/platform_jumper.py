@@ -2,8 +2,12 @@
 import pygame
 import random
 import os
+from pygame import mixer
+from spritesheet import SpriteSheet
+from enemy import Enemy
 
 #initialise pygame
+mixer.init()
 pygame.init()
 
 #game window dimensions
@@ -12,11 +16,20 @@ SCREEN_HEIGHT = 600
 
 #create game window
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption('Jumpy')
+pygame.display.set_caption('Jumpy by @rocio')
 
 #set frame rate
 clock = pygame.time.Clock()
 FPS = 60
+
+#load music and sounds
+pygame.mixer.music.load('assets/music.mp3')
+pygame.mixer.music.set_volume(0.6)
+pygame.mixer.music.play(-1, 0.0)
+jump_fx = pygame.mixer.Sound('assets/jump.mp3')
+jump_fx.set_volume(0.5)
+death_fx = pygame.mixer.Sound('assets/death.mp3')
+death_fx.set_volume(0.5)
 
 #game variables
 SCROLL_THRESH = 200
@@ -31,9 +44,10 @@ fade_counter = 0
 if os.path.exists('score.txt'):
     with open('score.txt', 'r') as file:
         high_score = int(file.read())
-high_score = 0
+else:
+    high_score = 0
 
-#define colours
+#define colors
 WHITE = (255, 255, 255)
 BLACK = (0,0,0)
 PANEL = (153, 217, 234)
@@ -48,6 +62,9 @@ font_big = pygame.font.SysFont('Lucida Sans', 24)
 jumpy_image = pygame.image.load("assets/jump.png").convert_alpha()
 bg_image = pygame.image.load("assets/bg.png").convert_alpha()
 platform_image = pygame.image.load("assets/wood.png").convert_alpha()
+#bird spritesheet
+bird_sheet_img = pygame.image.load('assets/bird.png').convert_alpha()
+bird_sheet = SpriteSheet(bird_sheet_img)
 
 #function for outputing text to the screen
 def draw_text(text, font, text_col, x, y):
@@ -111,7 +128,8 @@ class Player():
                     if self.vel_y > 0:
                         self.rect.bottom = platform.rect.top
                         dy = 0
-                        self.vel_y = -20 
+                        self.vel_y = -20
+                        jump_fx.play() 
 
         #check if the player has bounced to the top of the screen
         if self.rect.top <= SCROLL_THRESH:
@@ -123,6 +141,9 @@ class Player():
 		#update rectangle position
         self.rect.x += dx
         self.rect.y += dy + scroll
+
+        #update mask
+        self.mask = pygame.mask.from_surface(self.image)
 
         return scroll
 
@@ -167,6 +188,7 @@ jumpy = Player(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 150)
 
 #platform instance - create sprite groups
 platform_group = pygame.sprite.Group()
+enemy_group = pygame.sprite.Group()
 
 #create starting platform
 platform = Platform(0, SCREEN_HEIGHT - 50, SCREEN_WIDTH, False)
@@ -194,7 +216,7 @@ while run:
             p_x = random.randint(0, SCREEN_WIDTH - p_w)
             p_y = platform.rect.y - random.randint(80, 120)
             p_type = random.randint(1, 2)
-            if p_type == 1 and score > 800:
+            if p_type == 1 and score > 500:
                 p_moving = True
             else:
                 p_moving = False
@@ -204,6 +226,15 @@ while run:
 
         #update platforms
         platform_group.update(scroll)
+
+        #generate enemies:
+        if len(enemy_group) == 0 and score > 1500:
+            enemy = Enemy(SCREEN_WIDTH, 100, bird_sheet, 1.5)
+            enemy_group.add(enemy)
+
+        #update enemies
+        enemy_group.update(scroll, SCREEN_WIDTH)
+
 
         #update score
         if scroll > 0:
@@ -215,10 +246,21 @@ while run:
 
         #draw sprites
         platform_group.draw(screen)
+        enemy_group.draw(screen)
         jumpy.draw()
 
         #draw panel
         draw_panel()
+
+        #check game over
+        if jumpy.rect.top > SCREEN_HEIGHT:
+            game_over = True
+            death_fx.play()
+        #check for collision with enemies
+        if pygame.sprite.spritecollide(jumpy, enemy_group, False):
+            if pygame.sprite.spritecollide(jumpy, enemy_group, False, pygame.sprite.collide_mask):
+                game_over = True
+                death_fx.play()
     else:
         if fade_counter < SCREEN_WIDTH:
             fade_counter += 5
@@ -243,15 +285,13 @@ while run:
             fade_counter = 0
             #reposition jumpy
             jumpy.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT - 150)
+            #reset enemies
+            enemy_group.empty()
             #reset platforms
             platform_group.empty()
             #create starting platform
             platform = Platform(0, SCREEN_HEIGHT - 50, SCREEN_WIDTH, False)
             platform_group.add(platform)
-
-    #check game over
-    if jumpy.rect.top > SCREEN_HEIGHT:
-        game_over = True
 
 	#event handler
     for event in pygame.event.get():
